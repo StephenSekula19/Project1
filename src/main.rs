@@ -4,70 +4,106 @@ use std::fs;
 use std::process;
 use std::io::Write;
 
+/// Trait for a generic compiler.
+/// Compilation, token management, and parsing.
 pub trait Compiler {
+    /// Begin compilation.
     fn compile(&mut self, source: &str);
 
+    /// Advance to the next token and return it.
     fn next_token(&mut self) -> String;
-
+    
+    /// Start parsing the token stream.
     fn parse(&mut self);
 
+    /// Get the current token without advancing.
     fn current_token(&self) -> String;
 
+    /// Set the current token manually.
     fn set_current_token(&mut self, tok: String);
 }
 
+/// Trait for lexical analysis.
+/// Tokenizes.
 pub trait LexicalAnalyzer {
+    /// Return the next character.
     fn get_char(&mut self) -> Option<char>;
 
+    /// Add a character to the current lexeme.
     fn add_char(&mut self, c: char);
 
+    /// Lookup if a string is a valid token.
     fn lookup(&self, s: &str) -> bool;
 
+    /// Tokenize the entire source code into a vector of tokens.
     fn tokenize(&mut self, source: &str) -> Vec<String>;
 }
 
+/// Trait for syntax analysis and HTML generation.
 pub trait SyntaxAnalyzer {
+    /// Parse the entire document.
     fn parse_lolcode(&mut self);
 
+    /// Parse the HEAD section of the document.
     fn parse_head(&mut self);
 
+    /// Parse the TITLE element inside HEAD.
     fn parse_title(&mut self);
 
+    /// Parse a comment block.
     fn parse_comment(&mut self);
 
+    /// Parse the main body content.
     fn parse_body(&mut self);
 
+    /// Parse a paragraph block.
     fn parse_paragraph(&mut self);
 
+    /// Parse the inner content of a paragraph.
     fn parse_inner_paragraph(&mut self);
 
+    /// Parse inline text or formatting inside a paragraph.
     fn parse_inner_text(&mut self);
 
+    /// Parse a variable definition.
     fn parse_variable_define(&mut self);
 
+    /// Parse a variable use.
     fn parse_variable_use(&mut self);
 
+    /// Parse bold text.
     fn parse_bold(&mut self);
 
+    /// Parse italics text.
     fn parse_italics(&mut self);
 
+    /// Parse a list block.
     fn parse_list(&mut self);
 
+    /// Parse items inside a list.
     fn parse_list_items(&mut self);
 
+    /// Parse content inside a list item.
     fn parse_inner_list(&mut self);
 
+    /// Parse an audio element.
     fn parse_audio(&mut self);
 
+    /// Parse a video element.
     fn parse_video(&mut self);
 
+    /// Parse a newline element.
     fn parse_newline(&mut self);
 
+    /// Parse normal text content.
     fn parse_text(&mut self);
 
+    /// Append content to HTML output.
     fn write_html(&mut self, content: &str);
 }
 
+/// Main compiler structure.
+/// Stores tokens, variables, and generated HTML output.
 pub struct LolCompiler {
     tokens: Vec<String>,
     current_index: usize,
@@ -77,6 +113,7 @@ pub struct LolCompiler {
 }
 
 impl LolCompiler {
+    /// Create a new instance of the compiler.
     pub fn new() -> Self {
         Self {
             tokens: vec![],
@@ -87,11 +124,14 @@ impl LolCompiler {
         }
     }
 
+    /// Print an error message and exit immediately.
     fn error(&self, msg: &str) -> ! {
         eprintln!("Syntax Error: {}", msg);
         process::exit(1);
     }
 
+    /// Check that the current token matches the expected value.
+    /// Advances to the next token if successful.
     fn match_token(&mut self, expected: &str) {
         if self.current_token().eq_ignore_ascii_case(expected) {
             self.next_token();
@@ -101,8 +141,10 @@ impl LolCompiler {
     }
 }
 
-
+/// Implementation of the Compiler trait.
 impl Compiler for LolCompiler {
+    /// Begins the full compilation process for a string.
+    /// This includes tokenizing, parsing, generating HTML.
     fn compile(&mut self, source: &str) {
         let mut lexer = LolLexer::new();
         self.tokens = lexer.tokenize(source);
@@ -136,6 +178,7 @@ impl Compiler for LolCompiler {
         }
     }
 
+    /// Advances the compiler to the next token.
     fn next_token(&mut self) -> String {
         if self.current_index + 1 < self.tokens.len() {
             self.current_index += 1;
@@ -146,19 +189,23 @@ impl Compiler for LolCompiler {
         self.current.clone()
     }
 
+    /// Invokes the main parsing routine for syntax analysis.
     fn parse(&mut self) {
         self.parse_lolcode();
     }
 
+    /// Retrieves the current token being processed by the compiler.
     fn current_token(&self) -> String {
         self.current.clone()
     }
 
+    /// Updates the current token with a new value.
     fn set_current_token(&mut self, tok: String) {
         self.current = tok;
     }
 }
 
+/// Lexer structure.
 pub struct LolLexer {
     chars: Vec<char>,
     position: usize,
@@ -166,6 +213,7 @@ pub struct LolLexer {
 }
 
 impl LolLexer {
+    /// Create a new instance of the lexer.
     pub fn new() -> Self {
         Self {
             chars: vec![],
@@ -174,16 +222,20 @@ impl LolLexer {
         }
     }
 
+    /// Check if a character is whitespace.
     fn is_whitespace(c: char) -> bool {
         matches!(c, ' ' | '\t' | '\n' | '\r')
     }
 
+    /// Check if a character is #.
     fn is_special(c: char) -> bool {
         c == '#'
     }
 }
 
+/// Implementation of the LexicalAnalyzer trait.
 impl LexicalAnalyzer for LolLexer {
+    /// Retrieves the next character from the input source.
     fn get_char(&mut self) -> Option<char> {
         if self.position < self.chars.len() {
             let ch = self.chars[self.position];
@@ -194,10 +246,13 @@ impl LexicalAnalyzer for LolLexer {
         }
     }
 
+    /// Adds a single character to the current lexeme being built.
+    /// Used to turn characters into a complete token.
     fn add_char(&mut self, c: char) {
         self.current_lexeme.push(c);
     }
 
+    /// Checks whether the provided string matches a valid keyword or symbol.
     fn lookup(&self, s: &str) -> bool {
         let valid = [
             "#HAI", "#KTHXBYE", "#OBTW", "#TLDR", "#MAEK", "#OIC", "#GIMMEH", "#MKAY", "#LEMME",
@@ -207,6 +262,7 @@ impl LexicalAnalyzer for LolLexer {
         valid.iter().any(|&v| v.eq_ignore_ascii_case(s))
     }
 
+    /// Tokenizes the given source string into a vector of valid tokens.
     fn tokenize(&mut self, source: &str) -> Vec<String> {
         self.chars = source.chars().collect();
         self.position = 0;
@@ -258,7 +314,9 @@ impl LexicalAnalyzer for LolLexer {
     }
 }
 
+/// Implementation of the SyntaxAnalyzer trait.
 impl SyntaxAnalyzer for LolCompiler {
+    /// Parse the document.
     fn parse_lolcode(&mut self) {
         self.match_token("#HAI");
         while self.current_token().eq_ignore_ascii_case("#OBTW") {
@@ -269,6 +327,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.match_token("#KTHXBYE");
     }
 
+    /// Parse HEAD section.
     fn parse_head(&mut self) {
         if self.current_token().eq_ignore_ascii_case("#MAEK") {
             self.match_token("#MAEK");
@@ -284,6 +343,7 @@ impl SyntaxAnalyzer for LolCompiler {
         }
     }
 
+    /// Parse TITLE element in HEAD.
     fn parse_title(&mut self) {
         self.match_token("#GIMMEH");
         self.match_token("TITLE");
@@ -298,6 +358,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.html_output.push_str(&format!("<html><head><title>{}</title></head><body>\n", title_text.trim()));
     }
 
+    /// Parse a comment block.
     fn parse_comment(&mut self) {
         self.match_token("#OBTW");
         let mut comment_text = String::new();
@@ -310,6 +371,7 @@ impl SyntaxAnalyzer for LolCompiler {
         println!("Comment: {}", comment_text.trim());
     }
 
+    /// Parse main body content.
     fn parse_body(&mut self) {
         while !self.current_token().eq_ignore_ascii_case("#KTHXBYE") && !self.current_token().is_empty() {
             match self.current_token().to_uppercase().as_str() {
@@ -324,6 +386,7 @@ impl SyntaxAnalyzer for LolCompiler {
         println!();
     }
 
+    /// Parse a paragraph block.
     fn parse_paragraph(&mut self) {
         self.match_token("#MAEK");
         self.match_token("PARAGRAF");
@@ -333,12 +396,14 @@ impl SyntaxAnalyzer for LolCompiler {
         self.match_token("#OIC");
     }
 
+    /// Parse inner content of a paragraph.
     fn parse_inner_paragraph(&mut self) {
         while !self.current_token().eq_ignore_ascii_case("#OIC") && !self.current_token().is_empty() {
             self.parse_inner_text();
         }
     }
 
+    /// Parse inline text, formatting, variables
     fn parse_inner_text(&mut self) {
         match self.current_token().to_uppercase().as_str() {
             "#GIMMEH" => {
@@ -358,6 +423,7 @@ impl SyntaxAnalyzer for LolCompiler {
         }
     }
 
+    /// Parse a variable definition.
     fn parse_variable_define(&mut self) {
         self.match_token("#I");
         self.match_token("HAZ");
@@ -375,6 +441,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.match_token("#MKAY");
     }
 
+    /// Parse a variable usage.
     fn parse_variable_use(&mut self) {
         self.match_token("#LEMME");
         self.match_token("SEE");
@@ -392,6 +459,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.html_output.push_str(" ");
     }
 
+    /// Parse bold text.
     fn parse_bold(&mut self) {
         self.match_token("BOLD");
         self.html_output.push_str("<b>");
@@ -404,6 +472,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.html_output.push_str("</b>");
     }
 
+    /// Parse italics text.
     fn parse_italics(&mut self) {
         self.match_token("ITALICS");
         self.html_output.push_str("<i>");
@@ -416,6 +485,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.html_output.push_str("</i>");
     }
 
+    /// Parse a list block.
     fn parse_list(&mut self) {
         self.match_token("#MAEK");
         self.match_token("LIST");
@@ -425,6 +495,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.match_token("#OIC");
     }
 
+    /// Parse items inside a list.
     fn parse_list_items(&mut self) {
         while self.current_token().eq_ignore_ascii_case("#GIMMEH") {
             self.match_token("#GIMMEH");
@@ -436,10 +507,12 @@ impl SyntaxAnalyzer for LolCompiler {
         }
     }
 
+    /// Parse inner content inside a list item.
     fn parse_inner_list(&mut self) {
         self.parse_inner_text();
     }
 
+    /// Parse audio element.
     fn parse_audio(&mut self) {
         self.match_token("SOUNDZ");
         let audio_address = self.current_token();
@@ -454,6 +527,7 @@ impl SyntaxAnalyzer for LolCompiler {
         println!("Audio URL: {}", audio_address);
     }
 
+    /// Parse video element.
     fn parse_video(&mut self) {
         self.match_token("VIDZ");
         let video_address = self.current_token();
@@ -468,12 +542,14 @@ impl SyntaxAnalyzer for LolCompiler {
         println!("Video URL: {}", video_address);
     }
 
+    /// Parse newline element.
     fn parse_newline(&mut self) {
         self.match_token("NEWLINE");
         print!("\n");
         self.html_output.push_str("<br/>\n");
     }
 
+    /// Parse standard text.
     fn parse_text(&mut self) {
         let token = self.current_token();
         if !token.starts_with('#') && token.chars().all(|c| c.is_ascii()) {
@@ -490,11 +566,14 @@ impl SyntaxAnalyzer for LolCompiler {
         }
     }
 
+    /// Append content to HTML output.
     fn write_html(&mut self, content: &str) {
         self.html_output.push_str(content);
     }
 }
 
+/// Main execution for the compiler.
+/// Reads file, verifies `.lol` extension, and compiles.
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
