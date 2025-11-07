@@ -157,12 +157,14 @@ impl Compiler for LolCompiler {
         self.current = self.tokens[0].clone();
         self.parse();
 
+        // Save generated HTML file.
         let filename = env::args().nth(1).unwrap();
         let html_filename = filename.replace(".lol", ".html");
         let mut file = fs::File::create(&html_filename).unwrap();
         file.write_all(self.html_output.as_bytes()).unwrap();
         println!("\nParsing completed successfully. HTML saved as {}", html_filename);
 
+        // Automatically open file in Chrome for Mac or Windows.
         if cfg!(target_os = "macos") {
             process::Command::new("open")
                 .arg("-a")
@@ -268,6 +270,7 @@ impl LexicalAnalyzer for LolLexer {
         self.position = 0;
         let mut tokens = vec![];
 
+        // Process one character at a time
         while let Some(c) = self.get_char() {
             if Self::is_whitespace(c) {
                 if !self.current_lexeme.is_empty() {
@@ -286,6 +289,7 @@ impl LexicalAnalyzer for LolLexer {
                 let mut token = String::new();
                 token.push(c);
 
+                // Build complete token until special break.
                 while let Some(next) = self.chars.get(self.position) {
                     if next.is_ascii_alphanumeric() || *next == ':' || *next == '/' || *next == '.' || *next == '?' || *next == '=' || *next == '&' || *next == '-' || *next == '%' {
                         token.push(*next);
@@ -295,6 +299,7 @@ impl LexicalAnalyzer for LolLexer {
                     }
                 }
 
+                // Validate token.
                 if !self.lookup(&token) && !token.starts_with("http") {
                     eprintln!("Lexical Error: Invalid token '{}'", token);
                     process::exit(1);
@@ -306,6 +311,7 @@ impl LexicalAnalyzer for LolLexer {
             }
         }
 
+        // Push remaining token.
         if !self.current_lexeme.is_empty() {
             tokens.push(self.current_lexeme.clone());
         }
@@ -348,6 +354,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.match_token("#GIMMEH");
         self.match_token("TITLE");
         let mut title_text = String::new();
+        // Collect title words.
         while !self.current_token().eq_ignore_ascii_case("#MKAY") {
             title_text.push_str(&self.current_token());
             title_text.push(' ');
@@ -583,16 +590,19 @@ fn main() {
 
     let filename = &args[1];
 
+    // Verify correct extension.
     if !filename.to_lowercase().ends_with(".lol") {
         eprintln!("Error: Only .lol files are accepted. '{}' is invalid.", filename);
         process::exit(1);
     }
 
+    // Read file contents.
     let contents = fs::read_to_string(filename).unwrap_or_else(|_| {
         eprintln!("Error: could not read file '{}'", filename);
         process::exit(1);
     });
 
+    // Run compiler on source text.
     let mut compiler = LolCompiler::new();
     compiler.compile(&contents);
 }
