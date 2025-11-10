@@ -139,6 +139,15 @@ impl LolCompiler {
             self.error(&format!("Expected '{}', found '{}'", expected, self.current_token()));
         }
     }
+
+    /// Look at the next token without advancing.
+    fn peek_next_token(&self) -> String {
+        if self.current_index + 1 < self.tokens.len() {
+            self.tokens[self.current_index + 1].clone()
+        } else {
+            String::new()
+        }
+    }
 }
 
 /// Implementation of the Compiler trait.
@@ -382,7 +391,16 @@ impl SyntaxAnalyzer for LolCompiler {
     fn parse_body(&mut self) {
         while !self.current_token().eq_ignore_ascii_case("#KTHXBYE") && !self.current_token().is_empty() {
             match self.current_token().to_uppercase().as_str() {
-                "#MAEK" => self.parse_paragraph(),
+                "#MAEK" => {
+                    let next = self.peek_next_token().to_uppercase();
+                    if next == "PARAGRAF" {
+                        self.parse_paragraph();
+                    } else if next == "LIST" {
+                        self.parse_list();
+                    } else {
+                        self.error(&format!("Unexpected construct after #MAEK: {}", next));
+                    }
+                }
                 "#GIMMEH" => self.parse_inner_text(),
                 "#LEMME" => self.parse_variable_use(),
                 "#I" => self.parse_variable_define(),
@@ -406,7 +424,22 @@ impl SyntaxAnalyzer for LolCompiler {
     /// Parse inner content of a paragraph.
     fn parse_inner_paragraph(&mut self) {
         while !self.current_token().eq_ignore_ascii_case("#OIC") && !self.current_token().is_empty() {
-            self.parse_inner_text();
+            match self.current_token().to_uppercase().as_str() {
+                "#MAEK" => {
+                    let next = self.peek_next_token().to_uppercase();
+                    if next == "LIST" {
+                        self.parse_list();
+                    } else if next == "PARAGRAF" {
+                        self.parse_paragraph();
+                    } else {
+                        self.error(&format!("Unexpected construct inside paragraph: {}", next));
+                    }
+                }
+                "#GIMMEH" => self.parse_inner_text(),
+                "#LEMME" => self.parse_variable_use(),
+                "#I" => self.parse_variable_define(),
+                _ => self.parse_text(),
+            }
         }
     }
 
@@ -471,9 +504,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.match_token("BOLD");
         self.html_output.push_str("<b>");
         while !self.current_token().eq_ignore_ascii_case("#MKAY") && !self.current_token().is_empty() {
-            print!("{} ", self.current_token());
-            self.html_output.push_str(&format!("{} ", self.current_token()));
-            self.next_token();
+            self.parse_inner_text();
         }
         self.match_token("#MKAY");
         self.html_output.push_str("</b>");
@@ -484,9 +515,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.match_token("ITALICS");
         self.html_output.push_str("<i>");
         while !self.current_token().eq_ignore_ascii_case("#MKAY") && !self.current_token().is_empty() {
-            print!("{} ", self.current_token());
-            self.html_output.push_str(&format!("{} ", self.current_token()));
-            self.next_token();
+            self.parse_inner_text();
         }
         self.match_token("#MKAY");
         self.html_output.push_str("</i>");
@@ -496,10 +525,33 @@ impl SyntaxAnalyzer for LolCompiler {
     fn parse_list(&mut self) {
         self.match_token("#MAEK");
         self.match_token("LIST");
-        self.html_output.push_str("<ul>\n");
-        self.parse_list_items();
-        self.html_output.push_str("</ul>\n");
+        self.html_output.push_str("<ul>");
+
+        while !self.current_token().eq_ignore_ascii_case("#OIC")
+            && !self.current_token().is_empty()
+        {
+            if self.current_token().eq_ignore_ascii_case("#GIMMEH") {
+                self.next_token(); // move past #GIMMEH
+                if self.current_token().eq_ignore_ascii_case("ITEM") {
+                    self.next_token(); // skip ITEM
+                    self.html_output.push_str("<li>");
+                    while !self.current_token().eq_ignore_ascii_case("#MKAY")
+                        && !self.current_token().is_empty()
+                    {
+                        self.html_output.push_str(&format!("{} ", self.current_token()));
+                        self.next_token();
+                    }
+                    self.html_output.push_str("</li>");
+                    self.match_token("#MKAY");
+                } else {
+                    self.error("Expected ITEM after #GIMMEH in list");
+                }
+            } else {
+                self.next_token();
+            }
+        }
         self.match_token("#OIC");
+        self.html_output.push_str("</ul>\n");
     }
 
     /// Parse items inside a list.
